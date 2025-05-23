@@ -2,7 +2,7 @@
 import Foundation
 
 /// Represents a file found that is related to the selected application.
-struct FoundFile: Identifiable, Hashable { // Added Hashable conformance
+struct FoundFile: Identifiable, Hashable {
     let id = UUID() // Unique ID for SwiftUI's List to track changes efficiently
     let url: URL       // The full URL/path of the file
     var isSelected: Bool = true // User can deselect files they don't want to remove
@@ -16,6 +16,13 @@ struct FoundFile: Identifiable, Hashable { // Added Hashable conformance
         url.deletingLastPathComponent().path
     }
 
-    // Hashable conformance is synthesized automatically because all properties (UUID, URL, Bool) are Hashable.
-    // Explicitly listing it just makes it clear it's intended.
+    // MARK: - Hashable Conformance
+    // Manually implement Hashable to ensure uniqueness based on 'url' only.
+    static func == (lhs: FoundFile, rhs: FoundFile) -> Bool {
+        return lhs.url == rhs.url
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(url)
+    }
 }
