@@ -1,0 +1,73 @@
+name: Release macOS App
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on pushes to tags like v1.0.0, v1.0.1, etc.
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest # Use the latest macOS runner
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Xcode
+      uses: actions/setup-xcode@v2
+      with:
+        # Specify a specific Xcode version if your project requires it, e.g., '15.0'
+        # xcode-version: '15.0'
+
+    - name: Build App
+      run: |
+        # IMPORTANT:
+        # - Replace 'AppJanitor.xcworkspace' with your actual workspace name.
+        #   If you use an .xcodeproj file, change '-workspace' to '-project'.
+        # - Replace 'appuninstall' with your actual scheme name.
+        # - CODE_SIGN_IDENTITY="", CODE_SIGNING_REQUIRED=NO, CODE_SIGNING_ALLOWED=NO
+        #   are used for an unsigned build. For signed builds, you'll need to
+        #   configure code signing with certificates/provisioning profiles.
+        xcodebuild clean build \
+          -workspace AppJanitor.xcworkspace \
+          -scheme appuninstall \
+          -configuration Release \
+          -derivedDataPath build \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO
+
+    - name: Zip App Bundle
+      run: |
+        APP_NAME="appuninstall" # Replace with the actual name of your .app bundle (e.g., "MyApp")
+        APP_PATH="build/Build/Products/Release/${APP_NAME}.app"
+        ZIP_FILE="${APP_NAME}.zip"
+        
+        if [ -d "$APP_PATH" ]; then
+          zip -r "$ZIP_FILE" "$APP_PATH"
+          echo "APP_ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
+        else
+          echo "Error: App bundle not found at $APP_PATH"
+          exit 1
+        fi
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN is automatically provided by GitHub Actions
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: true # Set to 'false' to publish the release immediately
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ env.APP_ZIP_FILE }}
+        asset_name: ${{ env.APP_ZIP_FILE }}
+        asset_content_type: application/zip
