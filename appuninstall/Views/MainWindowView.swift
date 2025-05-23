@@ -28,7 +28,7 @@ struct MainWindowView: View {
                             Text(viewModel.currentScanPath)
                                 .font(.caption)
                                 .foregroundColor(.gray)
-                                .lineLimit(1) // Prevent path from taking too much space
+                                .lineLimit(2) // Prevent path from taking too much space
                         }
                         .progressViewStyle(.linear)
                         .padding(.horizontal) // Padding for the progress bar itself

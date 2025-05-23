@@ -8,6 +8,7 @@ struct AppPaths { // Wrapped pathLocations in a struct
       "/Applications",
       "/private/var/db/receipts",
       "/Library/LaunchDaemons",
+      homeDirectory,
       "\(homeDirectory)/Downloads",
       "\(homeDirectory)/Library",
       "\(homeDirectory)/Library/Application Support",
