@@ -23,11 +23,22 @@ struct MainWindowView: View {
             }
         }
         // MARK: - Alerts
-        // Error Alert
+        // Error Alert (for general errors)
         .alert(isPresented: $viewModel.showErrorAlert) {
             Alert(title: Text("Error"),
                   message: Text(viewModel.errorMessage),
                   dismissButton: .default(Text("OK")))
+        }
+        // NEW: Permission Required Alert (for specific permission issues)
+        .alert("Permission Required", isPresented: $viewModel.showPermissionRequiredAlert) {
+            Button("Go to Settings") {
+                SystemSettingsHelper.openFullDiskAccessSettings() // Use the helper to deep link
+            }
+            Button("Not Now", role: .cancel) {
+                // User chose not to open settings.
+            }
+        } message: {
+            Text(viewModel.errorMessage) // Use errorMessage for the message content
         }
         // Confirmation Alert for Deletion
         .alert("Confirm Action", isPresented: $viewModel.showConfirmationAlert) {

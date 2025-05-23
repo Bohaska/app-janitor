@@ -87,40 +87,35 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     /// Removes common substrings (UUIDs, dates, versions, etc.) from file names based on predefined regexes and string lists.
     /// - Parameter file: The file name string to clean.
     /// - Returns: The cleaned file name string.
-    func removeCommonFileSubstrings(_ file: String) async -> String { // Made async to await computerName
+    func removeCommonFileSubstrings(_ file: String) async -> String {
         var transformedString = file.lowercased()
-        var nsString = transformedString as NSString // Use NSString for NSRange and regex operations
+        var nsString = transformedString as NSString
 
         // Apply regex replacements
-        // FIXED: Recalculate fullRange in each iteration.
         [uuidRegex, dateRegex, diagRegex, mmpVersionRegex, mmVersionRegex, duplicateFileNumberRegex].forEach { regex in
             if let regex = regex {
                 let currentFullRange = NSRange(location: 0, length: nsString.length) // Recalculate here!
                 transformedString = regex.stringByReplacingMatches(in: nsString as String, options: [], range: currentFullRange, withTemplate: "")
-                nsString = transformedString as NSString // Update nsString for subsequent operations
+                nsString = transformedString as NSString
             }
         }
 
         // Remove common extensions and substrings directly
-        // These are simple string replacements as in the original JS, not regex
-        // `commonExtensions` and `commonSubStrings` are from Utils/FilePatterns.swift
         for pattern in commonExtensions + commonSubStrings {
             transformedString = transformedString.replacingOccurrences(of: pattern.lowercased(), with: "")
         }
 
         // Remove computer name if available (read from actor's isolated state)
-        let currentComputerName = await self.computerName // Access isolated state using await
+        let currentComputerName = await self.computerName
         if !currentComputerName.isEmpty {
             let normCompName = normalizeString(currentComputerName, spacer: "-")
-                .replacingOccurrences(of: "’", with: "") // Handle specific apostrophe
+                .replacingOccurrences(of: "’", with: "")
                 .replacingOccurrences(of: "(", with: "")
                 .replacingOccurrences(of: ")", with: "")
             transformedString = transformedString.replacingOccurrences(of: normCompName.lowercased(), with: "")
         }
 
-        // Replace remaining space-like characters for consistency
         transformedString = replaceSpaceCharacters(transformedString)
-
         return transformedString
     }
 
@@ -133,25 +128,19 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     /// - Returns: An array of normalized app name patterns.
     func getAppNameVariations(appName: String, bundleId: String) -> [String] {
         var patternArray: [String] = []
-
-        // 1. App name with space-like chars replaced by '*'
         patternArray.append(replaceSpaceCharacters(appName))
 
-        // 2. If app name contains a '.', add first component (e.g. test.com -> test)
         let appNameComponents = normalizeString(appName).split(separator: ".").map(String.init)
         if let firstComponent = appNameComponents.first, !firstComponent.isEmpty {
             patternArray.append(firstComponent)
         }
 
-        // 3. If bundleId contains more than 2 components (e.g. com.test.app)
-        // add first two components (e.g. com.test)
         let bundleIdComponents = normalizeString(bundleId).split(separator: ".").map(String.init)
         if bundleIdComponents.count > 2 {
             let firstTwoComponents = bundleIdComponents.prefix(bundleIdComponents.count - 1).joined(separator: ".")
             patternArray.append(replaceSpaceCharacters(firstTwoComponents))
         }
 
-        // Ensure unique values using a Set
         return Array(Set(patternArray))
     }
 
@@ -163,34 +152,27 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     ///   - bundleId: The bundle identifier of the application.
     ///   - fileNameToCheck: The file name string to analyze.
     /// - Returns: `true` if the file name is determined to be related to the app, `false` otherwise.
-    func doesFileContainAppPattern(appNameVariations: [String], bundleId: String, fileNameToCheck: String) async -> Bool { // Made async to await removeCommonFileSubstrings
-        let strippedFileName = await removeCommonFileSubstrings(fileNameToCheck) // Clean the filename first (now async)
+    func doesFileContainAppPattern(appNameVariations: [String], bundleId: String, fileNameToCheck: String) async -> Bool {
+        let strippedFileName = await removeCommonFileSubstrings(fileNameToCheck)
         let normalizedBundleId = replaceSpaceCharacters(bundleId)
 
-        // 1. Check if file contains bundleID
         if strippedFileName.contains(normalizedBundleId) {
             return true
         }
 
-        // 2. Check if file contains variations of app name with a score threshold
-        // `scoreThreshold` is defined in Utils/Config.swift
         for appNameFilePattern in appNameVariations {
             let patternLowercased = appNameFilePattern.lowercased()
             if strippedFileName.contains(patternLowercased) {
                 var score = 0
-                // Simple score calculation based on original JS: count length of pattern if found
                 if let _ = strippedFileName.range(of: patternLowercased) {
                     score += patternLowercased.count
                 }
 
-                // Check ratio: pattern length / stripped file name length > scoreThreshold
-                // `scoreThreshold` is from Utils/Config.swift
                 if strippedFileName.count > 0 && Double(score) / Double(strippedFileName.count) > scoreThreshold {
                     return true
                 }
             }
         }
-
         return false
     }
 
@@ -202,51 +184,51 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     ///   - appURL: The URL of the `.app` bundle.
     ///   - appName: The human-readable name of the application.
     ///   - bundleId: The bundle identifier of the application.
-    /// - Returns: An array of `FoundFile` objects representing detected related files.
-    /// - Throws: An error if essential bundle information cannot be retrieved.
-    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String) async throws -> [FoundFile] {
-        await loadComputerName() // Ensure computer name is loaded
+    /// - Returns: A tuple containing an array of `FoundFile` objects and a boolean
+    ///            indicating if any permission-related errors were encountered during the scan.
+    /// - Throws: An error if essential bundle information cannot be retrieved (e.g., bundleId itself).
+    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String) async throws -> ([FoundFile], hasPermissionErrors: Bool) { // MODIFIED RETURN TYPE
+        await loadComputerName()
 
         let fileManager = FileManager.default
         var filesToRemove = Set<FoundFile>()
+        var encounteredPermissionErrorInScan: Bool = false // NEW FLAG
 
         let bundleIdComponents = bundleId.split(separator: ".").map(String.init)
         let appOrg = bundleIdComponents.count > 1 ? bundleIdComponents[1] : ""
 
-        // Prepare paths to search, converting String paths to URL.
-        // `AppPaths.pathLocations` is now used to access the array from Utils/PathLocations.swift
         var searchURLs: [URL] = []
-        for pathString in AppPaths.pathLocations { // FIXED: Use AppPaths.pathLocations
+        for pathString in AppPaths.pathLocations {
             let baseUrl = URL(fileURLWithPath: pathString)
             searchURLs.append(baseUrl)
             if !appOrg.isEmpty {
-                // Add company-specific subdirectories within common locations
                 searchURLs.append(baseUrl.appendingPathComponent(appOrg))
             }
         }
 
         let appNameVariations = getAppNameVariations(appName: appName, bundleId: bundleId)
-
-        // Add the main app bundle itself to the list of files to remove by default
         filesToRemove.insert(FoundFile(url: appURL))
 
         for directoryURL in searchURLs {
-            do {
-                var isDirectory: ObjCBool = false
-                guard fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-                    // print("Directory does not exist or is not a directory: \(directoryURL.path)")
-                    continue // Skip if path doesn't exist or isn't a directory
-                }
+            var isDirectory: ObjCBool = false
+            // Check if directory exists and is a directory. If not, skip.
+            // This does NOT explicitly check permissions here, but `enumerator` will fail if no read permission.
+            guard fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+                continue
+            }
 
-                // Use enumerator to iterate contents, which is more efficient for large directories
-                let resourceKeys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey]
-                guard let enumerator = fileManager.enumerator(at: directoryURL,
-                                                              includingPropertiesForKeys: Array(resourceKeys),
-                                                              options: [.skipsHiddenFiles, .skipsPackageDescendants /*, .skipsItemEnclosures */]) else { // FIXED: Removed .skipsItemEnclosures if deployment target is too low
-                    continue // Could not create enumerator (e.g., due to permissions)
-                }
+            let resourceKeys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey]
+            // If enumerator is nil, it often means permission denied or path is invalid.
+            guard let enumerator = fileManager.enumerator(at: directoryURL,
+                                                          includingPropertiesForKeys: Array(resourceKeys),
+                                                          options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { // Removed .skipsItemEnclosures for broader macOS compatibility
+                print("Skipping directory \(directoryURL.path) due to permission or access issue. No enumerator.")
+                encounteredPermissionErrorInScan = true // SET THE FLAG HERE!
+                continue
+            }
 
-                for case let itemURL as URL in enumerator {
+            for case let itemURL as URL in enumerator {
+                do {
                     // Check item type (file or directory)
                     if let resourceValues = try? itemURL.resourceValues(forKeys: resourceKeys),
                        let isRegularFile = resourceValues.isRegularFile,
@@ -254,27 +236,27 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
 
                         if isRegularFile {
                             let fileName = itemURL.lastPathComponent
-                            if await doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: fileName) { // FIXED: Await call
+                            if await doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: fileName) {
                                 filesToRemove.insert(FoundFile(url: itemURL))
                             }
                         } else if isDirectoryItem {
-                            // If it's a directory, check its name as well
                             let dirName = itemURL.lastPathComponent
-                             if await doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: dirName) { // FIXED: Await call
-                                // If the directory name itself matches, add the directory to the list
+                             if await doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: dirName) {
                                 filesToRemove.insert(FoundFile(url: itemURL))
                             }
                         }
                     }
+                } catch {
+                    // This catch handles errors *during* enumeration (e.g., individual file access issues within an already accessible directory).
+                    // This is less common for FDA issues, but good to log.
+                    print("Error accessing item \(itemURL.path) within \(directoryURL.path): \(error.localizedDescription)")
+                    // We don't set encounteredPermissionErrorInScan here, as `enumerator`
+                    // already determined if the *directory* itself was accessible.
                 }
-            } catch {
-                // This catch block handles errors like permission denied for a specific directory.
-                // We print the error and continue to the next directory.
-                print("Error enumerating contents of \(directoryURL.path): \(error.localizedDescription)")
             }
         }
 
-        return Array(filesToRemove)
+        return (Array(filesToRemove), hasPermissionErrors: encounteredPermissionErrorInScan) // RETURN THE FLAG
     }
 
     /// Gets the application's icon for SwiftUI display.

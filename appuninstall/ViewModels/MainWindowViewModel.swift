@@ -25,6 +25,9 @@ class MainWindowViewModel: ObservableObject {
     @Published var confirmationMessage: String = ""
     var confirmationAction: (() -> Void)? // Action to perform if confirmation is accepted
 
+    // NEW: Property to control the specific permission alert
+    @Published var showPermissionRequiredAlert: Bool = false
+
     private let fileFinder = AppFileFinder() // Instance of the core logic actor
 
     init() {
@@ -62,31 +65,32 @@ class MainWindowViewModel: ObservableObject {
             selectedAppInfo = AppInfo(name: appName, bundleIdentifier: bundleId, icon: appIcon, appURL: appURL)
 
             dragDropZoneText = appName
-            // If appIcon is nil, use a default system icon, otherwise use the app's icon
             dragDropZoneImage = appIcon ?? Image(systemName: "app.fill")
 
-            // Perform file finding on a background task managed by the actor
-            let foundFiles = try await fileFinder.findAppFilesToRemove(appURL: appURL, appName: appName, bundleId: bundleId)
+            // MODIFIED: Capture the new 'hasPermissionErrors' flag
+            let (foundFiles, hadPermissionErrors) = try await fileFinder.findAppFilesToRemove(appURL: appURL, appName: appName, bundleId: bundleId)
             self.files = foundFiles
             statusText = "\(files.count) Files Found"
-            isDeleteButtonDisabled = files.isEmpty // Disable delete if no files found
-        } catch {
-            // MARK: - Permissions Error Handling Improvement
-            let nsError = error as NSError
-            if nsError.domain == NSCocoaErrorDomain && (nsError.code == NSFileReadNoPermissionError || nsError.code == NSFileReadUnknownError) {
-                // NSFileReadUnknownError can also sometimes indicate permission issues
+            isDeleteButtonDisabled = files.isEmpty
+
+            // NEW LOGIC: Check the flag returned by AppFileFinder
+            if hadPermissionErrors {
                 errorMessage = """
-                Permission Denied: App Janitor needs permission to access files in some system directories (e.g., your Library folders).
+                App Janitor needs "Full Disk Access" to scan all related files for this application.
                 
-                Please grant "Full Disk Access" to App Janitor in System Settings > Privacy & Security > Full Disk Access.
+                Without it, some files (e.g., in Application Support, Caches, or Logs) might not be found.
                 
-                Alternatively, you can manually add specific folders under "Files and Folders."
+                Please go to System Settings > Privacy & Security > Full Disk Access, and grant "App Janitor" access.
                 
-                You can find more details in the "Permissions" section under the Help menu.
+                You can find more detailed instructions in the "Permissions" section under the Help menu.
                 """
-            } else {
-                errorMessage = "An unexpected error occurred while scanning for files: \(error.localizedDescription)"
+                showPermissionRequiredAlert = true // Show the specific permission alert
             }
+
+        } catch {
+            // This catch block handles errors thrown by AppFileFinder (e.g., failed to get bundle ID)
+            // but NOT the permission issues for individual directory enumeration.
+            errorMessage = "An unexpected error occurred while processing the app: \(error.localizedDescription)"
             showErrorAlert = true
         }
         isLoading = false
@@ -102,7 +106,6 @@ class MainWindowViewModel: ObservableObject {
         confirmationMessage = "Are you sure you want to move \(filesToTrash.count) file(s) to Trash?"
         confirmationAction = { [weak self] in
             guard let self = self else { return }
-            // Use a Task for the async operation
             Task { @MainActor in
                 await self.performTrashOperation(filesToTrash: filesToTrash)
             }
@@ -118,14 +121,15 @@ class MainWindowViewModel: ObservableObject {
         isLoading = true
         var successfulTrashCount = 0
 
+        // Clear any previous alerts if they were still showing before trashing
+        showErrorAlert = false
+        showPermissionRequiredAlert = false
+
         do {
-            // Attempt to close the running application if it's the main app
-            // This is non-blocking and relies on user interaction (macOS prompt)
             if let selectedApp = selectedAppInfo,
                let runningApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == selectedApp.bundleIdentifier }) {
                 print("Attempting to terminate running app: \(selectedApp.name)")
-                runningApp.terminate() // This sends a request to quit the app
-                // It's good practice to wait a bit if possible, but immediate trashing also works.
+                runningApp.terminate()
             }
 
             for file in filesToTrash {
@@ -135,20 +139,20 @@ class MainWindowViewModel: ObservableObject {
                 } catch {
                     // Log error for individual file but continue to next
                     print("Failed to trash file \(file.url.lastPathComponent): \(error.localizedDescription)")
-                    // Keep the overall error message generic or aggregate if many fail
-                    errorMessage = "Failed to move some files to trash. Please update permissions or try manually. \(error.localizedDescription)"
+                    errorMessage = "Failed to move some files to trash. Please check permissions or try manually. \(error.localizedDescription)"
                     showErrorAlert = true
                 }
             }
 
-            // Update the UI based on what was successfully trashed
             if successfulTrashCount == filesToTrash.count {
-                clearList() // All files gone, reset completely
+                clearList()
             } else if successfulTrashCount > 0 {
-                // Some files were trashed, update the list to show remaining
                 files.removeAll { f in filesToTrash.contains(where: { $0.id == f.id }) }
                 statusText = "\(files.count) Files Remaining"
                 isDeleteButtonDisabled = files.isEmpty
+            } else { // No files trashed (e.g. all failed)
+                errorMessage = "No files could be moved to trash. Please check App Janitor's permissions."
+                showErrorAlert = true
             }
         } catch {
             errorMessage = "A critical error occurred during trash operation: \(error.localizedDescription)"
@@ -164,11 +168,11 @@ class MainWindowViewModel: ObservableObject {
         selectedAppInfo = nil
         statusText = "Related Files"
         dragDropZoneText = "Drag and Drop App Here"
-        dragDropZoneImage = Image(systemName: "arrow.down.doc.fill") // Reset to default icon
+        dragDropZoneImage = Image(systemName: "arrow.down.doc.fill")
         isDeleteButtonDisabled = true
-        // Also clear any pending alert states
         showErrorAlert = false
         showConfirmationAlert = false
+        showPermissionRequiredAlert = false // Clear this alert too
         errorMessage = ""
         confirmationMessage = ""
         confirmationAction = nil
@@ -181,8 +185,7 @@ class MainWindowViewModel: ObservableObject {
     func toggleFileSelection(for id: UUID) {
         if let index = files.firstIndex(where: { $0.id == id }) {
             files[index].isSelected.toggle()
-            // Optional: Re-evaluate isDeleteButtonDisabled if all selected items become deselected
-            // isDeleteButtonDisabled = files.filter { $0.isSelected }.isEmpty
+            isDeleteButtonDisabled = files.filter { $0.isSelected }.isEmpty
         }
     }
 }
