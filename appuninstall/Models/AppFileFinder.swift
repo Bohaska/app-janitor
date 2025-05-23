@@ -27,6 +27,7 @@ private let diagRegex = compileRegex(diagRegexString)
 private let mmpVersionRegex = compileRegex(mmpVersionRegexString)
 private let mmVersionRegex = compileRegex(mmVersionRegexString)
 private let duplicateFileNumberRegex = compileRegex(duplicateFileNumberRegexString)
+private let pythonDirectoryRegex = compileRegex("^Python(\\d+(\\.\\d+)*)?$") // Regex for "Python" or "PythonX.Y" directories
 
 /// Manages the core logic for finding associated files for a given macOS application.
 actor AppFileFinder { // Using an actor for thread-safe mutable state (computerName)
@@ -350,6 +351,17 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                             if let resourceValues = try? itemURL.resourceValues(forKeys: resourceKeys),
                                let isRegularFile = resourceValues.isRegularFile,
                                let isDirectoryItem = resourceValues.isDirectory {
+
+                                // Skip Python directories
+                                if isDirectoryItem, let pythonRegex = pythonDirectoryRegex {
+                                    let lastPathComponent = itemURL.lastPathComponent
+                                    let range = NSRange(location: 0, length: lastPathComponent.utf16.count)
+                                    if pythonRegex.firstMatch(in: lastPathComponent, options: [], range: range) != nil {
+                                        print("Skipping Python directory: \(itemURL.path)")
+                                        enumerator.skipDescendants()
+                                        continue // Move to the next item
+                                    }
+                                }
 
                                 if isRegularFile || isDirectoryItem {
                                     if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, itemURL: itemURL, appURL: appURL, appName: appName) {
