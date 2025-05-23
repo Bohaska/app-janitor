@@ -394,7 +394,7 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                                 // NEW: Skip directories belonging to other apps
                                 if isDirectoryItem {
                                     let itemPathLowercased = itemURL.path.lowercased()
-                                    for otherBundleId in self.otherAppBundleIdentifiers {
+                                    for otherBundleId in await self.otherAppBundleIdentifiers {
                                         // Check if the directory path contains another app's bundle ID as a component.
                                         // This is a heuristic, assuming bundle IDs often appear as directory names
                                         // in Application Support, Caches, etc.
