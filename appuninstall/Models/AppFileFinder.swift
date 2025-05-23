@@ -374,63 +374,60 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                     }
 
                     let resourceKeys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey]
-                    guard let enumerator = fileManager.enumerator(at: directoryURL,
-                                                                  includingPropertiesForKeys: Array(resourceKeys),
-                                                                  options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
-                        print("Skipping directory \(directoryURL.path) due to permission or access issue (enumerator is nil).")
+                    var contents: [URL]
+                    do {
+                        // Use contentsOfDirectory to only get top-level items, not recursively
+                        contents = try fileManager.contentsOfDirectory(at: directoryURL,
+                                                                       includingPropertiesForKeys: Array(resourceKeys),
+                                                                       options: [.skipsHiddenFiles])
+                    } catch {
+                        print("Skipping directory \(directoryURL.path) due to permission or access issue: \(error.localizedDescription)")
                         return ([], true) // Return true for permission error for this directory
                     }
 
-                    // Labeled loop for skipping items
-                    itemLoop: for case let itemURL as URL in enumerator {
+                    for itemURL in contents {
                         // Report progress for each item being processed
                         await progressHandler(Double(completedLocations) / Double(totalSearchLocations), "Scanning: \(itemURL.path)")
 
                         do {
-                            if let resourceValues = try? itemURL.resourceValues(forKeys: resourceKeys),
-                               let isRegularFile = resourceValues.isRegularFile,
-                               let isDirectoryItem = resourceValues.isDirectory {
+                            let resourceValues = try itemURL.resourceValues(forKeys: resourceKeys)
+                            let isRegularFile = resourceValues.isRegularFile ?? false
+                            let isDirectoryItem = resourceValues.isDirectory ?? false
 
-                                // NEW: Skip directories belonging to other apps
-                                if isDirectoryItem {
-                                    let itemPathLowercased = itemURL.path.lowercased()
-                                    for otherBundleId in await self.otherAppBundleIdentifiers {
-                                        // Check if the directory path contains another app's bundle ID as a component.
-                                        // This is a heuristic, assuming bundle IDs often appear as directory names
-                                        // in Application Support, Caches, etc.
-                                        if itemPathLowercased.contains("/\(otherBundleId)/") || itemPathLowercased.hasSuffix("/\(otherBundleId)") {
-                                            print("Skipping directory \(itemURL.path) as it appears to belong to another app (\(otherBundleId)).")
-                                            enumerator.skipDescendants()
-                                            continue itemLoop // Skip to the next top-level item in the enumerator
-                                        }
-                                    }
-                                }
-
-                                // Existing: Skip Python directories
-                                if isDirectoryItem, let pythonRegex = pythonDirectoryRegex {
-                                    let lastPathComponent = itemURL.lastPathComponent
-                                    let range = NSRange(location: 0, length: lastPathComponent.utf16.count)
-                                    if pythonRegex.firstMatch(in: lastPathComponent, options: [], range: range) != nil {
-                                        print("Skipping Python directory: \(itemURL.path)")
-                                        enumerator.skipDescendants()
-                                        continue itemLoop // Skip to the next item
-                                    }
-                                }
-
-                                if isRegularFile || isDirectoryItem {
-                                    if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, itemURL: itemURL, appURL: appURL, appName: appName) {
-                                        filesFoundInDir.insert(FoundFile(url: itemURL))
-                                        if isDirectoryItem {
-                                            // If this directory itself matches, skip its contents to avoid redundant matches
-                                            enumerator.skipDescendants()
-                                        }
+                            // NEW: Skip directories belonging to other apps
+                            if isDirectoryItem {
+                                let itemPathLowercased = itemURL.path.lowercased()
+                                for otherBundleId in await self.otherAppBundleIdentifiers {
+                                    // Check if the directory path contains another app's bundle ID as a component.
+                                    // This is a heuristic, assuming bundle IDs often appear as directory names
+                                    // in Application Support, Caches, etc.
+                                    if itemPathLowercased.contains("/\(otherBundleId)/") || itemPathLowercased.hasSuffix("/\(otherBundleId)") {
+                                        print("Skipping directory \(itemURL.path) as it appears to belong to another app (\(otherBundleId)).")
+                                        continue // Skip to the next item in the current directory
                                     }
                                 }
                             }
+
+                            // Existing: Skip Python directories
+                            if isDirectoryItem, let pythonRegex = pythonDirectoryRegex {
+                                let lastPathComponent = itemURL.lastPathComponent
+                                let range = NSRange(location: 0, length: lastPathComponent.utf16.count)
+                                if pythonRegex.firstMatch(in: lastPathComponent, options: [], range: range) != nil {
+                                    print("Skipping Python directory: \(itemURL.path)")
+                                    continue // Skip to the next item in the current directory
+                                }
+                            }
+
+                            if isRegularFile || isDirectoryItem {
+                                if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, itemURL: itemURL, appURL: appURL, appName: appName) {
+                                    filesFoundInDir.insert(FoundFile(url: itemURL))
+                                    // No need to skip descendants as we are not enumerating recursively
+                                }
+                            }
                         } catch {
-                            // This catch handles errors for individual items within an enumerable directory.
+                            // This catch handles errors for individual items within a directory.
                             print("Error accessing item \(itemURL.path) within \(directoryURL.path): \(error.localizedDescription)")
-                            // We don't set dirHasPermissionError here, as the enumerator check handles the directory's overall accessibility.
+                            // We don't set dirHasPermissionError here, as the contentsOfDirectory check handles the directory's overall accessibility.
                         }
                     }
                     return (Array(filesFoundInDir), dirHasPermissionError) // Return results for this directory
