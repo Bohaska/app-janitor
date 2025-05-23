@@ -341,9 +341,13 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                                let isRegularFile = resourceValues.isRegularFile,
                                let isDirectoryItem = resourceValues.isDirectory {
 
-                                if isRegularFile || isDirectoryItem { // Process both files and directories with the same logic
+                                if isRegularFile || isDirectoryItem {
                                     if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, itemURL: itemURL, appURL: appURL, appName: appName) {
                                         filesFoundInDir.insert(FoundFile(url: itemURL))
+                                        if isDirectoryItem {
+                                            // If this directory itself matches, skip its contents to avoid redundant matches
+                                            enumerator.skipDescendants()
+                                        }
                                     }
                                 }
                             }
