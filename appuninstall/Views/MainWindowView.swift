@@ -18,8 +18,39 @@ struct MainWindowView: View {
             if viewModel.isLoading {
                 Color.black.opacity(0.6) // Semi-transparent dark overlay
                     .edgesIgnoringSafeArea(.all) // Extend across the entire window
-                ProgressView() // macOS native loading spinner
-                    .scaleEffect(1.5) // Make the spinner a bit larger
+                VStack {
+                    if viewModel.scanProgress > 0.0 && viewModel.scanProgress < 1.0 {
+                        // Show linear progress bar and current path during active scanning
+                        ProgressView(value: viewModel.scanProgress) {
+                            Text("Scanning Files...")
+                                .font(.headline)
+                        } currentValueLabel: {
+                            Text(viewModel.currentScanPath)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .lineLimit(1) // Prevent path from taking too much space
+                        }
+                        .progressViewStyle(.linear)
+                        .padding(.horizontal) // Padding for the progress bar itself
+                        .frame(width: 300) // Give it a fixed width for better appearance
+
+                        // Optional: A small circular indicator below the linear bar
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .scaleEffect(0.8) // Make it smaller
+                            .padding(.top, 5)
+
+                    } else {
+                        // Show generic circular progress for initial loading or finalization
+                        ProgressView("Processing...") // Or "Loading..."
+                            .progressViewStyle(.circular)
+                            .scaleEffect(1.5) // Keep it larger for generic state
+                    }
+                }
+                .padding(20) // Padding around the entire progress content
+                .background(Color.white)
+                .cornerRadius(10)
+                .shadow(radius: 5)
             }
         }
         // MARK: - Alerts
