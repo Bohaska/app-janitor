@@ -294,7 +294,7 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     /// - Returns: A tuple containing an array of `FoundFile` objects and a boolean
     ///            indicating if any permission-related errors were encountered during the scan.
     /// - Throws: An error if essential bundle information cannot be retrieved (e.g., bundleId itself).
-    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String, progressHandler: @Sendable @MainActor (Double, String) -> Void) async throws -> ([FoundFile], hasPermissionErrors: Bool) {
+    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String, progressHandler: @escaping @Sendable @MainActor (Double, String) -> Void) async throws -> ([FoundFile], hasPermissionErrors: Bool) {
         await loadComputerName() // Ensure computer name is loaded
 
         let fileManager = FileManager.default
