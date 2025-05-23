@@ -196,6 +196,8 @@ class MainWindowViewModel: ObservableObject {
         errorMessage = ""
         confirmationMessage = ""
         confirmationAction = nil
+        scanProgress = 0.0 // Ensure progress is reset
+        currentScanPath = "" // Ensure path is reset
     }
 
     /// Toggles the selection state of a specific `FoundFile` in the `files` array.

@@ -290,15 +290,16 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     ///   - appURL: The URL of the `.app` bundle.
     ///   - appName: The human-readable name of the application.
     ///   - bundleId: The bundle identifier of the application.
+    ///   - progressHandler: A closure to report scanning progress (0.0-1.0) and the current file path.
     /// - Returns: A tuple containing an array of `FoundFile` objects and a boolean
     ///            indicating if any permission-related errors were encountered during the scan.
     /// - Throws: An error if essential bundle information cannot be retrieved (e.g., bundleId itself).
-    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String) async throws -> ([FoundFile], hasPermissionErrors: Bool) {
+    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String, progressHandler: @Sendable @MainActor (Double, String) -> Void) async throws -> ([FoundFile], hasPermissionErrors: Bool) {
         await loadComputerName() // Ensure computer name is loaded
 
         let fileManager = FileManager.default
         var allFilesToRemove = Set<FoundFile>()
-        var overallPermissionError: Bool = false
+        var overallPermissionError = false
 
         let bundleIdComponents = bundleId.split(separator: ".").map(String.init)
         let appOrg = bundleIdComponents.count > 1 ? bundleIdComponents[1] : ""
@@ -315,12 +316,18 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
         let appNameVariations = getAppNameVariations(appName: appName, bundleId: bundleId)
         allFilesToRemove.insert(FoundFile(url: appURL)) // Add the main app bundle itself
 
+        let totalSearchLocations = searchURLs.count
+        var completedLocations = 0
+
         // MARK: - Concurrency Improvement: Use TaskGroup to scan directories in parallel
         await withTaskGroup(of: ([FoundFile], Bool).self) { group in
             for directoryURL in searchURLs {
                 group.addTask { [self] in // Capture self strongly within the task for actor context
                     var filesFoundInDir = Set<FoundFile>()
                     var dirHasPermissionError = false
+
+                    // Report progress for starting a new top-level directory scan
+                    await progressHandler(Double(completedLocations) / Double(totalSearchLocations), "Scanning: \(directoryURL.path)")
 
                     var isDirectory: ObjCBool = false
                     guard fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -336,6 +343,9 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                     }
 
                     for case let itemURL as URL in enumerator {
+                        // Report progress for each item being processed
+                        await progressHandler(Double(completedLocations) / Double(totalSearchLocations), "Scanning: \(itemURL.path)")
+
                         do {
                             if let resourceValues = try? itemURL.resourceValues(forKeys: resourceKeys),
                                let isRegularFile = resourceValues.isRegularFile,
@@ -367,9 +377,14 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                 if hasErrorInTask {
                     overallPermissionError = true // If any task had a permission error, set overall flag
                 }
+                completedLocations += 1 // Increment count for completed top-level search location
+                // Final update for this location's completion
+                await progressHandler(Double(completedLocations) / Double(totalSearchLocations), "Completed: \(completedLocations)/\(totalSearchLocations) locations")
             }
         }
 
+        // Ensure progress is 100% when done
+        await progressHandler(1.0, "Scan Complete.")
         return (Array(allFilesToRemove), hasPermissionErrors: overallPermissionError)
     }
 
