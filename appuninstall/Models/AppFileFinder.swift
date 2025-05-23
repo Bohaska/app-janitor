@@ -32,12 +32,49 @@ private let pythonDirectoryRegex = compileRegex("^Python(\\d+(\\.\\d+)*)?$") // 
 /// Manages the core logic for finding associated files for a given macOS application.
 actor AppFileFinder { // Using an actor for thread-safe mutable state (computerName)
     private var computerName: String = "" // Internal state for computer name
+    private var otherAppBundleIdentifiers: Set<String> = [] // NEW: Store other app bundle IDs
 
     init() {
         // Initialize computer name asynchronously
         Task {
             await loadComputerName()
         }
+    }
+
+    // NEW: Function to load bundle IDs of other installed applications
+    private func loadOtherAppBundleIdentifiers(excluding bundleIdToExclude: String) async {
+        var foundBundleIds: Set<String> = []
+        // Common application directories
+        let appSearchPaths = [
+            "/Applications",
+            "/System/Applications",
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
+        ]
+
+        let fileManager = FileManager.default
+        let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey]
+
+        for pathString in appSearchPaths {
+            let appsDirectoryURL = URL(fileURLWithPath: pathString)
+            guard let enumerator = fileManager.enumerator(at: appsDirectoryURL,
+                                                          includingPropertiesForKeys: Array(resourceKeys),
+                                                          options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
+                continue // Skip if directory cannot be enumerated
+            }
+
+            for case let itemURL as URL in enumerator {
+                // Only consider top-level .app bundles
+                if itemURL.pathExtension.lowercased() == "app" {
+                    if let bundle = Bundle(url: itemURL), let bundleId = bundle.bundleIdentifier {
+                        if bundleId.lowercased() != bundleIdToExclude.lowercased() {
+                            foundBundleIds.insert(bundleId.lowercased())
+                        }
+                    }
+                }
+            }
+        }
+        self.otherAppBundleIdentifiers = foundBundleIds
+        print("Loaded \(foundBundleIds.count) other app bundle IDs for exclusion.")
     }
 
     /// Loads the computer's name using `scutil` command.
@@ -297,6 +334,7 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     /// - Throws: An error if essential bundle information cannot be retrieved (e.g., bundleId itself).
     func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String, progressHandler: @escaping @Sendable @MainActor (Double, String) -> Void) async throws -> ([FoundFile], hasPermissionErrors: Bool) {
         await loadComputerName() // Ensure computer name is loaded
+        await loadOtherAppBundleIdentifiers(excluding: bundleId) // NEW: Load other app bundle IDs for exclusion
 
         let fileManager = FileManager.default
         var allFilesToRemove = Set<FoundFile>()
@@ -343,7 +381,8 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                         return ([], true) // Return true for permission error for this directory
                     }
 
-                    for case let itemURL as URL in enumerator {
+                    // Labeled loop for skipping items
+                    itemLoop: for case let itemURL as URL in enumerator {
                         // Report progress for each item being processed
                         await progressHandler(Double(completedLocations) / Double(totalSearchLocations), "Scanning: \(itemURL.path)")
 
@@ -352,14 +391,29 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                                let isRegularFile = resourceValues.isRegularFile,
                                let isDirectoryItem = resourceValues.isDirectory {
 
-                                // Skip Python directories
+                                // NEW: Skip directories belonging to other apps
+                                if isDirectoryItem {
+                                    let itemPathLowercased = itemURL.path.lowercased()
+                                    for otherBundleId in self.otherAppBundleIdentifiers {
+                                        // Check if the directory path contains another app's bundle ID as a component.
+                                        // This is a heuristic, assuming bundle IDs often appear as directory names
+                                        // in Application Support, Caches, etc.
+                                        if itemPathLowercased.contains("/\(otherBundleId)/") || itemPathLowercased.hasSuffix("/\(otherBundleId)") {
+                                            print("Skipping directory \(itemURL.path) as it appears to belong to another app (\(otherBundleId)).")
+                                            enumerator.skipDescendants()
+                                            continue itemLoop // Skip to the next top-level item in the enumerator
+                                        }
+                                    }
+                                }
+
+                                // Existing: Skip Python directories
                                 if isDirectoryItem, let pythonRegex = pythonDirectoryRegex {
                                     let lastPathComponent = itemURL.lastPathComponent
                                     let range = NSRange(location: 0, length: lastPathComponent.utf16.count)
                                     if pythonRegex.firstMatch(in: lastPathComponent, options: [], range: range) != nil {
                                         print("Skipping Python directory: \(itemURL.path)")
                                         enumerator.skipDescendants()
-                                        continue // Move to the next item
+                                        continue itemLoop // Skip to the next item
                                     }
                                 }
 
