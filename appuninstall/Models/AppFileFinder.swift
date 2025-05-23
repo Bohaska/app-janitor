@@ -161,6 +161,26 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
         return Array(Set(patternArray.filter { !$0.isEmpty }))
     }
 
+    // MARK: - Regex Conversion Helper
+    /// Converts a glob-style pattern (using '*' as wildcard) into a regular expression pattern.
+    /// Adds word boundaries for single-word patterns to prevent partial matches.
+    private func globToRegex(_ globPattern: String) -> String {
+        // Escape special regex characters that are not intended as wildcards
+        let escapedPattern = NSRegularExpression.escapedPattern(for: globPattern)
+        // Replace glob '*' with regex '.*' (match any character zero or more times)
+        // Replace glob '?' with regex '.' (match any character exactly once)
+        var regexPattern = escapedPattern.replacingOccurrences(of: "\\*", with: ".*")
+        regexPattern = regexPattern.replacingOccurrences(of: "\\?", with: ".")
+
+        // Heuristic: if the pattern doesn't contain '.*' (meaning it didn't have '*' originally)
+        // and it's not empty, consider it a "word" pattern and add word boundaries.
+        // This prevents "bar" from matching "foobar" but allows "hidden.*bar" to match "hidden-bar".
+        if !regexPattern.contains(".*") && !regexPattern.isEmpty {
+            regexPattern = "\\b" + regexPattern + "\\b"
+        }
+        return regexPattern
+    }
+
     // MARK: - File Content Checking
 
     /// Checks if a file name contains app-related patterns using the bundle ID and app name variations.
@@ -171,22 +191,26 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     /// - Returns: `true` if the file name is determined to be related to the app, `false` otherwise.
     func doesFileContainAppPattern(appNameVariations: [String], bundleId: String, fileNameToCheck: String) async -> Bool {
         let strippedFileName = await removeCommonFileSubstrings(fileNameToCheck)
-        let normalizedBundleId = replaceSpaceCharacters(bundleId)
-
-        if strippedFileName.contains(normalizedBundleId) {
-            return true
+        
+        // Check against the bundle ID pattern first
+        let normalizedBundleId = replaceSpaceCharacters(bundleId) // e.g., "com*microsoft*outlook"
+        let bundleIdRegexPattern = globToRegex(normalizedBundleId)
+        if let regex = compileRegex(bundleIdRegexPattern) {
+            let range = NSRange(location: 0, length: strippedFileName.utf16.count)
+            if regex.firstMatch(in: strippedFileName, options: [], range: range) != nil {
+                return true
+            }
         }
 
+        // Check against each app name variation pattern
         for appNameFilePattern in appNameVariations {
             let patternLowercased = appNameFilePattern.lowercased()
-            if strippedFileName.contains(patternLowercased) {
-                var score = 0
-                if let _ = strippedFileName.range(of: patternLowercased) {
-                    score += patternLowercased.count
-                }
+            let appNameRegexPattern = globToRegex(patternLowercased)
 
-                if strippedFileName.count > 0 && Double(score) / Double(strippedFileName.count) > scoreThreshold {
-                    return true
+            if let regex = compileRegex(appNameRegexPattern) {
+                let range = NSRange(location: 0, length: strippedFileName.utf16.count)
+                if regex.firstMatch(in: strippedFileName, options: [], range: range) != nil {
+                    return true // A match found using a precise regex pattern
                 }
             }
         }
