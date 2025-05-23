@@ -27,6 +27,8 @@ class MainWindowViewModel: ObservableObject {
 
     // NEW: Property to control the specific permission alert
     @Published var showPermissionRequiredAlert: Bool = false
+    @Published var scanProgress: Double = 0.0 // New: Progress from 0.0 to 1.0
+    @Published var currentScanPath: String = "" // New: Current file path being scanned
 
     private let fileFinder = AppFileFinder() // Instance of the core logic actor
 
@@ -67,8 +69,23 @@ class MainWindowViewModel: ObservableObject {
             dragDropZoneText = appName
             dragDropZoneImage = appIcon ?? Image(systemName: "app.fill")
 
-            // MODIFIED: Capture the new 'hasPermissionErrors' flag
-            let (foundFiles, hadPermissionErrors) = try await fileFinder.findAppFilesToRemove(appURL: appURL, appName: appName, bundleId: bundleId)
+            // Reset progress indicators
+            scanProgress = 0.0
+            currentScanPath = ""
+
+            // Pass a progress handler to the file finder
+            let (foundFiles, hadPermissionErrors) = try await fileFinder.findAppFilesToRemove(
+                appURL: appURL,
+                appName: appName,
+                bundleId: bundleId,
+                progressHandler: { [weak self] progress, path in
+                    // Ensure updates are on the main actor
+                    Task { @MainActor in
+                        self?.scanProgress = progress
+                        self?.currentScanPath = path
+                    }
+                }
+            )
             self.files = foundFiles
             statusText = "\(files.count) Files Found"
             isDeleteButtonDisabled = files.isEmpty
@@ -94,6 +111,9 @@ class MainWindowViewModel: ObservableObject {
             showErrorAlert = true
         }
         isLoading = false
+        // Reset progress indicators after scan is complete
+        scanProgress = 0.0
+        currentScanPath = ""
     }
 
     /// Presents a confirmation alert to the user before attempting to move files to trash.
