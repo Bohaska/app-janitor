@@ -128,20 +128,37 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     /// - Returns: An array of normalized app name patterns.
     func getAppNameVariations(appName: String, bundleId: String) -> [String] {
         var patternArray: [String] = []
-        patternArray.append(replaceSpaceCharacters(appName))
 
-        let appNameComponents = normalizeString(appName).split(separator: ".").map(String.init)
-        if let firstComponent = appNameComponents.first, !firstComponent.isEmpty {
-            patternArray.append(firstComponent)
+        // 1. Full app name, with spaces/dots replaced by wildcards
+        patternArray.append(replaceSpaceCharacters(appName)) // e.g., "microsoft*outlook"
+
+        // 2. Full app name, normalized (lowercase, no spaces/dots)
+        patternArray.append(normalizeString(appName))       // e.g., "microsoftoutlook"
+
+        // 3. Full bundle ID, with dots replaced by wildcards
+        patternArray.append(replaceSpaceCharacters(bundleId)) // e.g., "com*microsoft*outlook"
+
+        // 4. Full bundle ID, normalized (lowercase, no dots)
+        patternArray.append(normalizeString(bundleId))       // e.g., "commicrosoftoutlook"
+
+        // 5. Last component of the bundle ID (e.g., "outlook" from "com.microsoft.Outlook")
+        // This is useful for files named after the specific product, not the full bundle path.
+        let bundleIdComponents = bundleId.split(separator: ".").map(String.init)
+        if let lastComponent = bundleIdComponents.last, !lastComponent.isEmpty {
+            patternArray.append(normalizeString(lastComponent))
+            patternArray.append(replaceSpaceCharacters(lastComponent))
         }
 
-        let bundleIdComponents = normalizeString(bundleId).split(separator: ".").map(String.init)
-        if bundleIdComponents.count > 2 {
-            let firstTwoComponents = bundleIdComponents.prefix(bundleIdComponents.count - 1).joined(separator: ".")
-            patternArray.append(replaceSpaceCharacters(firstTwoComponents))
+        // 6. Last word of the app name (e.g., "outlook" from "Microsoft Outlook")
+        // Similar to the above, for files named after the product.
+        let appNameWords = appName.split(separator: " ").map(String.init)
+        if let lastWord = appNameWords.last, !lastWord.isEmpty {
+            patternArray.append(normalizeString(lastWord))
+            patternArray.append(replaceSpaceCharacters(lastWord))
         }
 
-        return Array(Set(patternArray))
+        // Ensure uniqueness and remove any potential empty strings
+        return Array(Set(patternArray.filter { !$0.isEmpty }))
     }
 
     // MARK: - File Content Checking
