@@ -30,7 +30,7 @@ jobs:
       # Step 2: Selects a specific Xcode version.
       # It's good practice to specify a version for consistency across builds.
       - name: Set up Xcode
-        uses: actions/setup-xcode@v2
+        uses: actions/setup-xcode@v3
         with:
           xcode-version: '16.0' # Specify your desired Xcode version, e.g., '15.0'
 
