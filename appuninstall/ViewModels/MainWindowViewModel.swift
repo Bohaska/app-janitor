@@ -1,5 +1,4 @@
-//  MainWindowViewModel.swift
-
+// App Janitor/ViewModels/MainWindowViewModel.swift
 import SwiftUI
 import AppKit // For NSWorkspace (trashing files, quitting apps, opening in Finder)
 import Foundation
@@ -72,7 +71,22 @@ class MainWindowViewModel: ObservableObject {
             statusText = "\(files.count) Files Found"
             isDeleteButtonDisabled = files.isEmpty // Disable delete if no files found
         } catch {
-            errorMessage = "An error occurred while scanning for files: \(error.localizedDescription)"
+            // MARK: - Permissions Error Handling Improvement
+            let nsError = error as NSError
+            if nsError.domain == NSCocoaErrorDomain && (nsError.code == NSFileReadNoPermissionError || nsError.code == NSFileReadUnknownError) {
+                // NSFileReadUnknownError can also sometimes indicate permission issues
+                errorMessage = """
+                Permission Denied: App Janitor needs permission to access files in some system directories (e.g., your Library folders).
+                
+                Please grant "Full Disk Access" to App Janitor in System Settings > Privacy & Security > Full Disk Access.
+                
+                Alternatively, you can manually add specific folders under "Files and Folders."
+                
+                You can find more details in the "Permissions" section under the Help menu.
+                """
+            } else {
+                errorMessage = "An unexpected error occurred while scanning for files: \(error.localizedDescription)"
+            }
             showErrorAlert = true
         }
         isLoading = false
@@ -122,7 +136,7 @@ class MainWindowViewModel: ObservableObject {
                     // Log error for individual file but continue to next
                     print("Failed to trash file \(file.url.lastPathComponent): \(error.localizedDescription)")
                     // Keep the overall error message generic or aggregate if many fail
-                    errorMessage = "Failed to move some files to trash. Please check permissions or try manually. \(error.localizedDescription)"
+                    errorMessage = "Failed to move some files to trash. Please update permissions or try manually. \(error.localizedDescription)"
                     showErrorAlert = true
                 }
             }
@@ -167,6 +181,8 @@ class MainWindowViewModel: ObservableObject {
     func toggleFileSelection(for id: UUID) {
         if let index = files.firstIndex(where: { $0.id == id }) {
             files[index].isSelected.toggle()
+            // Optional: Re-evaluate isDeleteButtonDisabled if all selected items become deselected
+            // isDeleteButtonDisabled = files.filter { $0.isSelected }.isEmpty
         }
     }
 }
