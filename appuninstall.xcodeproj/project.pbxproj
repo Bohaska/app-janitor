@@ -21,33 +21,9 @@
 		BB190D342DDF5F5C009D7F0E /* AppJanitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppJanitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		BB190D0D2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "appuninstall" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Utils/Utils.swift,
-			);
-			target = BB190CFB2DDF5792009D7F0E /* appuninstall */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		BB190D0E2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "Copy Bundle Resources" phase from "appuninstall" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = BB190CFA2DDF5792009D7F0E /* Resources */;
-			membershipExceptions = (
-				Utils/Utils.swift,
-			);
-		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BB190CFE2DDF5792009D7F0E /* appuninstall */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				BB190D0D2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "appuninstall" target */,
-				BB190D0E2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "Copy Bundle Resources" phase from "appuninstall" target */,
-			);
 			path = appuninstall;
 			sourceTree = "<group>";
 		};

@@ -94,7 +94,7 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
         // Apply regex replacements
         [uuidRegex, dateRegex, diagRegex, mmpVersionRegex, mmVersionRegex, duplicateFileNumberRegex].forEach { regex in
             if let regex = regex {
-                let currentFullRange = NSRange(location: 0, length: nsString.length) // Recalculate here!
+                let currentFullRange = NSRange(location: 0, length: nsString.length)
                 transformedString = regex.stringByReplacingMatches(in: nsString as String, options: [], range: currentFullRange, withTemplate: "")
                 nsString = transformedString as NSString
             }
@@ -187,12 +187,12 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
     /// - Returns: A tuple containing an array of `FoundFile` objects and a boolean
     ///            indicating if any permission-related errors were encountered during the scan.
     /// - Throws: An error if essential bundle information cannot be retrieved (e.g., bundleId itself).
-    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String) async throws -> ([FoundFile], hasPermissionErrors: Bool) { // MODIFIED RETURN TYPE
-        await loadComputerName()
+    func findAppFilesToRemove(appURL: URL, appName: String, bundleId: String) async throws -> ([FoundFile], hasPermissionErrors: Bool) {
+        await loadComputerName() // Ensure computer name is loaded
 
         let fileManager = FileManager.default
-        var filesToRemove = Set<FoundFile>()
-        var encounteredPermissionErrorInScan: Bool = false // NEW FLAG
+        var allFilesToRemove = Set<FoundFile>()
+        var overallPermissionError: Bool = false
 
         let bundleIdComponents = bundleId.split(separator: ".").map(String.init)
         let appOrg = bundleIdComponents.count > 1 ? bundleIdComponents[1] : ""
@@ -207,56 +207,66 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
         }
 
         let appNameVariations = getAppNameVariations(appName: appName, bundleId: bundleId)
-        filesToRemove.insert(FoundFile(url: appURL))
+        allFilesToRemove.insert(FoundFile(url: appURL)) // Add the main app bundle itself
 
-        for directoryURL in searchURLs {
-            var isDirectory: ObjCBool = false
-            // Check if directory exists and is a directory. If not, skip.
-            // This does NOT explicitly check permissions here, but `enumerator` will fail if no read permission.
-            guard fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-                continue
-            }
+        // MARK: - Concurrency Improvement: Use TaskGroup to scan directories in parallel
+        await withTaskGroup(of: ([FoundFile], Bool).self) { group in
+            for directoryURL in searchURLs {
+                group.addTask { [self] in // Capture self strongly within the task for actor context
+                    var filesFoundInDir = Set<FoundFile>()
+                    var dirHasPermissionError = false
 
-            let resourceKeys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey]
-            // If enumerator is nil, it often means permission denied or path is invalid.
-            guard let enumerator = fileManager.enumerator(at: directoryURL,
-                                                          includingPropertiesForKeys: Array(resourceKeys),
-                                                          options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { // Removed .skipsItemEnclosures for broader macOS compatibility
-                print("Skipping directory \(directoryURL.path) due to permission or access issue. No enumerator.")
-                encounteredPermissionErrorInScan = true // SET THE FLAG HERE!
-                continue
-            }
+                    var isDirectory: ObjCBool = false
+                    guard fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+                        return ([], false) // Directory doesn't exist or isn't a directory, no error for us
+                    }
 
-            for case let itemURL as URL in enumerator {
-                do {
-                    // Check item type (file or directory)
-                    if let resourceValues = try? itemURL.resourceValues(forKeys: resourceKeys),
-                       let isRegularFile = resourceValues.isRegularFile,
-                       let isDirectoryItem = resourceValues.isDirectory {
+                    let resourceKeys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey]
+                    guard let enumerator = fileManager.enumerator(at: directoryURL,
+                                                                  includingPropertiesForKeys: Array(resourceKeys),
+                                                                  options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
+                        print("Skipping directory \(directoryURL.path) due to permission or access issue (enumerator is nil).")
+                        return ([], true) // Return true for permission error for this directory
+                    }
 
-                        if isRegularFile {
-                            let fileName = itemURL.lastPathComponent
-                            if await doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: fileName) {
-                                filesToRemove.insert(FoundFile(url: itemURL))
+                    for case let itemURL as URL in enumerator {
+                        do {
+                            if let resourceValues = try? itemURL.resourceValues(forKeys: resourceKeys),
+                               let isRegularFile = resourceValues.isRegularFile,
+                               let isDirectoryItem = resourceValues.isDirectory {
+
+                                if isRegularFile {
+                                    let fileName = itemURL.lastPathComponent
+                                    if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: fileName) {
+                                        filesFoundInDir.insert(FoundFile(url: itemURL))
+                                    }
+                                } else if isDirectoryItem {
+                                    let dirName = itemURL.lastPathComponent
+                                    if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: dirName) {
+                                        filesFoundInDir.insert(FoundFile(url: itemURL))
+                                    }
+                                }
                             }
-                        } else if isDirectoryItem {
-                            let dirName = itemURL.lastPathComponent
-                             if await doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: dirName) {
-                                filesToRemove.insert(FoundFile(url: itemURL))
-                            }
+                        } catch {
+                            // This catch handles errors for individual items within an enumerable directory.
+                            print("Error accessing item \(itemURL.path) within \(directoryURL.path): \(error.localizedDescription)")
+                            // We don't set dirHasPermissionError here, as the enumerator check handles the directory's overall accessibility.
                         }
                     }
-                } catch {
-                    // This catch handles errors *during* enumeration (e.g., individual file access issues within an already accessible directory).
-                    // This is less common for FDA issues, but good to log.
-                    print("Error accessing item \(itemURL.path) within \(directoryURL.path): \(error.localizedDescription)")
-                    // We don't set encounteredPermissionErrorInScan here, as `enumerator`
-                    // already determined if the *directory* itself was accessible.
+                    return (Array(filesFoundInDir), dirHasPermissionError) // Return results for this directory
+                }
+            }
+
+            // Aggregate results from all tasks
+            for await (foundInTask, hasErrorInTask) in group {
+                allFilesToRemove.formUnion(foundInTask) // Add files from this task to the overall set
+                if hasErrorInTask {
+                    overallPermissionError = true // If any task had a permission error, set overall flag
                 }
             }
         }
 
-        return (Array(filesToRemove), hasPermissionErrors: encounteredPermissionErrorInScan) // RETURN THE FLAG
+        return (Array(allFilesToRemove), hasPermissionErrors: overallPermissionError)
     }
 
     /// Gets the application's icon for SwiftUI display.

@@ -24,90 +24,103 @@ final class AppJanitorTests: XCTestCase {
 
     // MARK: - replaceSpaceCharacters Tests
 
-    func testReplaceSpaceCharacters_replacesSpaces() {
+    func testReplaceSpaceCharacters_replacesSpaces() async { // Marked as async
         let appNameWithSpaces = "app Name"
         let bundleIdWithSpaces = "com test app"
         let expectedAppOutput = "app*name"
         let expectedBundleOutput = "com*test*app"
 
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(appNameWithSpaces), expectedAppOutput)
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(bundleIdWithSpaces), expectedBundleOutput)
+        let actualAppOutput = await fileFinder.replaceSpaceCharacters(appNameWithSpaces) // Await call outside XCTAssert
+        XCTAssertEqual(actualAppOutput, expectedAppOutput)
+
+        let actualBundleOutput = await fileFinder.replaceSpaceCharacters(bundleIdWithSpaces) // Await call outside XCTAssert
+        XCTAssertEqual(actualBundleOutput, expectedBundleOutput)
     }
 
-    func testReplaceSpaceCharacters_replacesDots() {
+    func testReplaceSpaceCharacters_replacesDots() async { // Marked as async
         let appNameWithDot = "app.Name"
         let bundleId = "com.test.app"
         let expectedAppOutput = "app*name"
         let expectedBundleOutput = "com*test*app"
 
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(appNameWithDot), expectedAppOutput)
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(bundleId), expectedBundleOutput)
+        let actualAppOutput = await fileFinder.replaceSpaceCharacters(appNameWithDot)
+        XCTAssertEqual(actualAppOutput, expectedAppOutput)
+
+        let actualBundleOutput = await fileFinder.replaceSpaceCharacters(bundleId)
+        XCTAssertEqual(actualBundleOutput, expectedBundleOutput)
     }
 
-    func testReplaceSpaceCharacters_replacesUnderscores() {
+    func testReplaceSpaceCharacters_replacesUnderscores() async { // Marked as async
         let appNameWithUnderscore = "app_Name"
         let bundleIdWithUnderscore = "com_test_app"
         let expectedAppOutput = "app*name"
         let expectedBundleOutput = "com*test*app"
 
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(appNameWithUnderscore), expectedAppOutput)
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(bundleIdWithUnderscore), expectedBundleOutput)
+        let actualAppOutput = await fileFinder.replaceSpaceCharacters(appNameWithUnderscore)
+        XCTAssertEqual(actualAppOutput, expectedAppOutput)
+
+        let actualBundleOutput = await fileFinder.replaceSpaceCharacters(bundleIdWithUnderscore)
+        XCTAssertEqual(actualBundleOutput, expectedBundleOutput)
     }
 
-    func testReplaceSpaceCharacters_replacesDashes() {
+    func testReplaceSpaceCharacters_replacesDashes() async { // Marked as async
         let appNameWithDash = "app-Name"
         let bundleIdWithDash = "com-test-app"
         let expectedAppOutput = "app*name"
         let expectedBundleOutput = "com*test*app"
 
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(appNameWithDash), expectedAppOutput)
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(bundleIdWithDash), expectedBundleOutput)
+        let actualAppOutput = await fileFinder.replaceSpaceCharacters(appNameWithDash)
+        XCTAssertEqual(actualAppOutput, expectedAppOutput)
+
+        let actualBundleOutput = await fileFinder.replaceSpaceCharacters(bundleIdWithDash)
+        XCTAssertEqual(actualBundleOutput, expectedBundleOutput)
     }
 
-    func testReplaceSpaceCharacters_replacesCombination() {
+    func testReplaceSpaceCharacters_replacesCombination() async { // Marked as async
         let bundleIdCombo = "com-test_app"
         let expectedBundleOutput = "com*test*app"
-        XCTAssertEqual(fileFinder.replaceSpaceCharacters(bundleIdCombo), expectedBundleOutput)
+        let actualBundleOutput = await fileFinder.replaceSpaceCharacters(bundleIdCombo)
+        XCTAssertEqual(actualBundleOutput, expectedBundleOutput)
     }
 
     // MARK: - getAppNameVariations Tests
 
-    func testGetAppNameVariations_returnsArrayOfStrings() { // No async needed for this pure function
+    func testGetAppNameVariations_returnsArrayOfStrings() async { // Marked as async
         let appName = "appName"
         let bundleId = "com.test.app"
-        let variations = fileFinder.getAppNameVariations(appName: appName, bundleId: bundleId)
+        let variations = await fileFinder.getAppNameVariations(appName: appName, bundleId: bundleId) // Added await
         XCTAssertFalse(variations.isEmpty)
         XCTAssertTrue(variations.allSatisfy { !$0.isEmpty }) // Ensure no empty strings
     }
 
-    func testGetAppNameVariations_convertsToLowercase() {
+    func testGetAppNameVariations_convertsToLowercase() async { // Marked as async
         let appName = "AppName"
         let bundleId = "Com.Test.App"
-        let variations = fileFinder.getAppNameVariations(appName: appName, bundleId: bundleId)
+        let variations = await fileFinder.getAppNameVariations(appName: appName, bundleId: bundleId) // Added await
         XCTAssertTrue(variations.allSatisfy { $0 == $0.lowercased() })
     }
 
-    func testGetAppNameVariations_replacesSpaceChars() {
+    func testGetAppNameVariations_replacesSpaceChars() async { // Marked as async
         let appNameWithSpaces = "app Name"
         let bundleId = "com.test.app"
-        let variations = fileFinder.getAppNameVariations(appName: appNameWithSpaces, bundleId: bundleId)
+        let variations = await fileFinder.getAppNameVariations(appName: appNameWithSpaces, bundleId: bundleId) // Added await
         XCTAssertTrue(variations.allSatisfy { !$0.contains(" ") })
         XCTAssertTrue(variations.contains("app*name"))
         XCTAssertTrue(variations.contains("appname")) // normalizeString also adds this
         XCTAssertTrue(variations.contains("com*test"))
     }
 
-    func testGetAppNameVariations_createsNewPatternIfAppContainsDot() {
+    func testGetAppNameVariations_createsNewPatternIfAppContainsDot() async { // Marked as async
         let appNameWithDot = "app.Name"
         let bundleId = "com.test.app"
-        let variations = fileFinder.getAppNameVariations(appName: appNameWithDot, bundleId: bundleId)
+        let variations = await fileFinder.getAppNameVariations(appName: appNameWithDot, bundleId: bundleId) // Added await
         XCTAssertTrue(variations.contains("app"))
     }
 
-    func testGetAppNameVariations_doesNotReturnDuplicates() {
+    func testGetAppNameVariations_doesNotReturnDuplicates() async { // Marked as async
         let appName = "appName"
         let bundleId = "com.test.app"
-        let variations = fileFinder.getAppNameVariations(appName: appName, bundleId: bundleId)
+        let variations = await fileFinder.getAppNameVariations(appName: appName, bundleId: bundleId) // Added await
         XCTAssertTrue(isArrayUniqueValues(variations)) // isArrayUniqueValues is from Utils/Utils.swift
     }
 
@@ -141,6 +154,16 @@ final class AppJanitorTests: XCTestCase {
         let result2 = await fileFinder.removeCommonFileSubstrings("\(appName)\(exampleVersion2)")
         XCTAssertFalse(result2.contains(exampleVersion2))
         XCTAssertEqual(result2, "appname")
+
+        let bundleResult1 = await fileFinder.removeCommonFileSubstrings("com*app*desktop-\(exampleVersion1)")
+        XCTAssertTrue(bundleResult1.contains("com*app*desktop")) // This checks if the version is removed, not if the entire string becomes "appname"
+        XCTAssertFalse(bundleResult1.contains(exampleVersion1))
+
+
+        let bundleResult2 = await fileFinder.removeCommonFileSubstrings("com*app*desktop-\(exampleVersion2)")
+        XCTAssertTrue(bundleResult2.contains("com*app*desktop"))
+        XCTAssertFalse(bundleResult2.contains(exampleVersion2))
+
     }
 
     func testRemoveCommonFileSubstrings_removesCommonExtensions() async {
