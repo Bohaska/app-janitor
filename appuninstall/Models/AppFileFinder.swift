@@ -183,37 +183,102 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
 
     // MARK: - File Content Checking
 
-    /// Checks if a file name contains app-related patterns using the bundle ID and app name variations.
+    /// Checks if a file or directory path contains app-related patterns, using stricter context checks.
     /// - Parameters:
-    ///   - appNameVariations: An array of app name patterns to check against.
-    ///   - bundleId: The bundle identifier of the application.
-    ///   - fileNameToCheck: The file name string to analyze.
-    /// - Returns: `true` if the file name is determined to be related to the app, `false` otherwise.
-    func doesFileContainAppPattern(appNameVariations: [String], bundleId: String, fileNameToCheck: String) async -> Bool {
-        let strippedFileName = await removeCommonFileSubstrings(fileNameToCheck)
-        
-        // Check against the bundle ID pattern first
-        let normalizedBundleId = replaceSpaceCharacters(bundleId) // e.g., "com*microsoft*outlook"
-        let bundleIdRegexPattern = globToRegex(normalizedBundleId)
-        if let regex = compileRegex(bundleIdRegexPattern) {
-            let range = NSRange(location: 0, length: strippedFileName.utf16.count)
-            if regex.firstMatch(in: strippedFileName, options: [], range: range) != nil {
-                return true
-            }
+    ///   - appNameVariations: An array of app name patterns to check against (e.g., "Hidden Bar", "hidden*bar").
+    ///   - bundleId: The bundle identifier of the application (e.g., "com.example.HiddenBar").
+    ///   - itemURL: The full URL of the file or directory being checked.
+    ///   - appURL: The URL of the main .app bundle.
+    ///   - appName: The human-readable name of the application.
+    /// - Returns: `true` if the file/directory is determined to be related to the app, `false` otherwise.
+    func doesFileContainAppPattern(appNameVariations: [String], bundleId: String, itemURL: URL, appURL: URL, appName: String) async -> Bool {
+        let fullPath = itemURL.path.lowercased()
+        let lastPathComponent = itemURL.lastPathComponent.lowercased()
+        let parentPath = itemURL.deletingLastPathComponent().path.lowercased()
+
+        // 1. Direct containment within the app bundle itself (most reliable)
+        // This handles files like MyApp.app/Contents/Info.plist
+        if fullPath.hasPrefix(appURL.path.lowercased()) {
+            return true
         }
 
-        // Check against each app name variation pattern
-        for appNameFilePattern in appNameVariations {
-            let patternLowercased = appNameFilePattern.lowercased()
-            let appNameRegexPattern = globToRegex(patternLowercased)
+        // Prepare strong patterns for path-level matching.
+        // These are patterns that, if found anywhere in the path, strongly indicate a match.
+        let normalizedBundleId = replaceSpaceCharacters(bundleId) // e.g., "com*example*hiddenbar"
+        let normalizedAppName = replaceSpaceCharacters(appName)   // e.g., "hidden*bar"
+        let normalizedAppBundleName = replaceSpaceCharacters(appName) + ".app" // e.g., "hidden*bar.app"
 
-            if let regex = compileRegex(appNameRegexPattern) {
-                let range = NSRange(location: 0, length: strippedFileName.utf16.count)
-                if regex.firstMatch(in: strippedFileName, options: [], range: range) != nil {
-                    return true // A match found using a precise regex pattern
+        let strongPathPatterns = [normalizedBundleId, normalizedAppName, normalizedAppBundleName]
+
+        // 2. Check if the full path contains any of the strong patterns.
+        // These are checked against the raw full path, not stripped, to preserve directory context.
+        for pattern in strongPathPatterns {
+            if let regex = compileRegex(globToRegex(pattern)) {
+                if regex.firstMatch(in: fullPath, options: [], range: NSRange(location: 0, length: fullPath.utf16.count)) != nil {
+                    return true
                 }
             }
         }
+
+        // 3. Check the last path component (filename/dirname) against app name variations.
+        // This is where we apply `removeCommonFileSubstrings` to the last component.
+        let strippedLastPathComponent = await removeCommonFileSubstrings(lastPathComponent)
+
+        for appNameFilePattern in appNameVariations {
+            let patternLowercased = appNameFilePattern.lowercased()
+            let appNameRegexPattern = globToRegex(patternLowercased) // This adds \b for single words
+
+            if let regex = compileRegex(appNameRegexPattern) {
+                let fullStrippedRange = NSRange(location: 0, length: strippedLastPathComponent.utf16.count)
+                let matchResult = regex.firstMatch(in: strippedLastPathComponent, options: [], range: fullStrippedRange)
+
+                if let match = matchResult {
+                    // A match on the last component. Now, verify context and match strictness.
+
+                    // Define what constitutes a "generic" pattern that needs stronger context.
+                    // - Short patterns (e.g., "bar", "app", "data")
+                    // - Patterns that are also in commonSubStrings or commonExtensions
+                    let isGenericPattern = (patternLowercased.count <= 4 && !patternLowercased.contains("*")) ||
+                                           commonSubStrings.contains(patternLowercased) ||
+                                           commonExtensions.contains(patternLowercased)
+
+                    if isGenericPattern {
+                        // For generic patterns, require the match to cover the entire stripped last path component
+                        // AND require that the parent path contains a strong app pattern.
+                        // This prevents "bar.py" (stripped to "bar*py") from matching "bar" unless it's exactly "bar".
+                        // And even then, it needs parent context.
+                        if match.range == fullStrippedRange { // Match must cover the entire stripped string
+                            var foundStrongContextInParent = false
+                            // Define strong patterns for parent path context check, including exact strings
+                            let strongParentContextPatterns = [
+                                normalizedBundleId,
+                                normalizedAppName,
+                                normalizedAppBundleName,
+                                bundleId.lowercased(), // New: exact bundle ID
+                                appName.lowercased()   // New: exact app name
+                            ]
+                            for strongPattern in strongParentContextPatterns {
+                                if let strongRegex = compileRegex(globToRegex(strongPattern)) {
+                                    let parentRange = NSRange(location: 0, length: parentPath.utf16.count)
+                                    if strongRegex.firstMatch(in: parentPath, options: [], range: parentRange) != nil {
+                                        foundStrongContextInParent = true
+                                        break
+                                    }
+                                }
+                            }
+                            if foundStrongContextInParent {
+                                return true
+                            }
+                        }
+                    } else {
+                        // If the pattern itself is specific (e.g., "hidden*bar", "com*hidden*bar"),
+                        // a match on the last component is sufficient (even if it's a substring match).
+                        return true
+                    }
+                }
+            }
+        }
+
         return false
     }
 
@@ -276,14 +341,8 @@ actor AppFileFinder { // Using an actor for thread-safe mutable state (computerN
                                let isRegularFile = resourceValues.isRegularFile,
                                let isDirectoryItem = resourceValues.isDirectory {
 
-                                if isRegularFile {
-                                    let fileName = itemURL.lastPathComponent
-                                    if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: fileName) {
-                                        filesFoundInDir.insert(FoundFile(url: itemURL))
-                                    }
-                                } else if isDirectoryItem {
-                                    let dirName = itemURL.lastPathComponent
-                                    if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, fileNameToCheck: dirName) {
+                                if isRegularFile || isDirectoryItem { // Process both files and directories with the same logic
+                                    if await self.doesFileContainAppPattern(appNameVariations: appNameVariations, bundleId: bundleId, itemURL: itemURL, appURL: appURL, appName: appName) {
                                         filesFoundInDir.insert(FoundFile(url: itemURL))
                                     }
                                 }
