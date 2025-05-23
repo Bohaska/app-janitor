@@ -6,20 +6,67 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		BB190D382DDF5F5C009D7F0E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BB190CF42DDF5792009D7F0E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB190CFB2DDF5792009D7F0E;
+			remoteInfo = appuninstall;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		BB190CFC2DDF5792009D7F0E /* appuninstall.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = appuninstall.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB190D342DDF5F5C009D7F0E /* AppJanitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppJanitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BB190D0D2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "appuninstall" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Utils/Utils.swift,
+			);
+			target = BB190CFB2DDF5792009D7F0E /* appuninstall */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		BB190D0E2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "Copy Bundle Resources" phase from "appuninstall" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = BB190CFA2DDF5792009D7F0E /* Resources */;
+			membershipExceptions = (
+				Utils/Utils.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BB190CFE2DDF5792009D7F0E /* appuninstall */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BB190D0D2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "appuninstall" target */,
+				BB190D0E2DDF57B1009D7F0E /* Exceptions for "appuninstall" folder in "Copy Bundle Resources" phase from "appuninstall" target */,
+			);
 			path = appuninstall;
+			sourceTree = "<group>";
+		};
+		BB190D352DDF5F5C009D7F0E /* AppJanitorTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AppJanitorTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		BB190CF92DDF5792009D7F0E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB190D312DDF5F5C009D7F0E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +80,7 @@
 			isa = PBXGroup;
 			children = (
 				BB190CFE2DDF5792009D7F0E /* appuninstall */,
+				BB190D352DDF5F5C009D7F0E /* AppJanitorTests */,
 				BB190CFD2DDF5792009D7F0E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +89,7 @@
 			isa = PBXGroup;
 			children = (
 				BB190CFC2DDF5792009D7F0E /* appuninstall.app */,
+				BB190D342DDF5F5C009D7F0E /* AppJanitorTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +119,29 @@
 			productReference = BB190CFC2DDF5792009D7F0E /* appuninstall.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BB190D332DDF5F5C009D7F0E /* AppJanitorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB190D3A2DDF5F5C009D7F0E /* Build configuration list for PBXNativeTarget "AppJanitorTests" */;
+			buildPhases = (
+				BB190D302DDF5F5C009D7F0E /* Sources */,
+				BB190D312DDF5F5C009D7F0E /* Frameworks */,
+				BB190D322DDF5F5C009D7F0E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB190D392DDF5F5C009D7F0E /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BB190D352DDF5F5C009D7F0E /* AppJanitorTests */,
+			);
+			name = AppJanitorTests;
+			packageProductDependencies = (
+			);
+			productName = AppJanitorTests;
+			productReference = BB190D342DDF5F5C009D7F0E /* AppJanitorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +154,10 @@
 				TargetAttributes = {
 					BB190CFB2DDF5792009D7F0E = {
 						CreatedOnToolsVersion = 16.3;
+					};
+					BB190D332DDF5F5C009D7F0E = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = BB190CFB2DDF5792009D7F0E;
 					};
 				};
 			};
@@ -100,12 +176,20 @@
 			projectRoot = "";
 			targets = (
 				BB190CFB2DDF5792009D7F0E /* appuninstall */,
+				BB190D332DDF5F5C009D7F0E /* AppJanitorTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		BB190CFA2DDF5792009D7F0E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB190D322DDF5F5C009D7F0E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +206,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB190D302DDF5F5C009D7F0E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BB190D392DDF5F5C009D7F0E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB190CFB2DDF5792009D7F0E /* appuninstall */;
+			targetProxy = BB190D382DDF5F5C009D7F0E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		BB190D062DDF5793009D7F0E /* Debug */ = {
@@ -293,6 +392,38 @@
 			};
 			name = Release;
 		};
+		BB190D3B2DDF5F5C009D7F0E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = bohaska.AppJanitorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/appuninstall.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/appuninstall";
+			};
+			name = Debug;
+		};
+		BB190D3C2DDF5F5C009D7F0E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = bohaska.AppJanitorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/appuninstall.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/appuninstall";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -310,6 +441,15 @@
 			buildConfigurations = (
 				BB190D092DDF5793009D7F0E /* Debug */,
 				BB190D0A2DDF5793009D7F0E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB190D3A2DDF5F5C009D7F0E /* Build configuration list for PBXNativeTarget "AppJanitorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB190D3B2DDF5F5C009D7F0E /* Debug */,
+				BB190D3C2DDF5F5C009D7F0E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
